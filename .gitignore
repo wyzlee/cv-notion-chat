@@ -1,5 +1,8 @@
 .streamlit/secrets.toml
 
+notion_content/
+.streamlit/
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]

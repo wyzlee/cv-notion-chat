@@ -1,53 +1,59 @@
-import streamlit as st
-from openai import OpenAI
+# **streamlit_app.py**
 
-# Show title and description.
-st.title("📄 Document question answering")
-st.write(
-    "Upload a document below and ask a question about it – GPT will answer! "
-    "To use this app, you need to provide an OpenAI API key, which you can get [here](https://platform.openai.com/account/api-keys). "
+import time
+import streamlit as st
+from utils import load_chain
+
+# Custom image for the app icon and the assistant's avatar
+company_logo = 'https://www.app.nl/wp-content/uploads/2019/01/Blendle.png'
+
+# Configure Streamlit page
+st.set_page_config(
+    page_title="Your Notion Chatbot",
+    page_icon=company_logo
 )
 
-# Ask user for their OpenAI API key via `st.text_input`.
-# Alternatively, you can store the API key in `./.streamlit/secrets.toml` and access it
-# via `st.secrets`, see https://docs.streamlit.io/develop/concepts/connections/secrets-management
-openai_api_key = st.text_input("OpenAI API Key", type="password")
-if not openai_api_key:
-    st.info("Please add your OpenAI API key to continue.", icon="🗝️")
-else:
+# Initialize LLM chain
+chain = load_chain()
 
-    # Create an OpenAI client.
-    client = OpenAI(api_key=openai_api_key)
+# Initialize chat history
+if 'messages' not in st.session_state:
+    # Start with first message from assistant
+    st.session_state['messages'] = [{"role": "assistant", 
+                                  "content": "Hi human! I am Blendle's smart AI. How can I help you today?"}]
 
-    # Let the user upload a file via `st.file_uploader`.
-    uploaded_file = st.file_uploader(
-        "Upload a document (.txt or .md)", type=("txt", "md")
-    )
+# Display chat messages from history on app rerun
+# Custom avatar for the assistant, default avatar for user
+for message in st.session_state.messages:
+    if message["role"] == 'assistant':
+        with st.chat_message(message["role"], avatar=company_logo):
+            st.markdown(message["content"])
+    else:
+        with st.chat_message(message["role"]):
+            st.markdown(message["content"])
 
-    # Ask the user for a question via `st.text_area`.
-    question = st.text_area(
-        "Now ask a question about the document!",
-        placeholder="Can you give me a short summary?",
-        disabled=not uploaded_file,
-    )
+# Chat logic
+if query := st.chat_input("Ask me anything"):
+    # Add user message to chat history
+    st.session_state.messages.append({"role": "user", "content": query})
+    # Display user message in chat message container
+    with st.chat_message("user"):
+        st.markdown(query)
 
-    if uploaded_file and question:
+    with st.chat_message("assistant", avatar=company_logo):
+        message_placeholder = st.empty()
+        # Send user's question to our chain
+        result = chain({"question": query})
+        response = result['answer']
+        full_response = ""
 
-        # Process the uploaded file and question.
-        document = uploaded_file.read().decode()
-        messages = [
-            {
-                "role": "user",
-                "content": f"Here's a document: {document} \n\n---\n\n {question}",
-            }
-        ]
+        # Simulate stream of response with milliseconds delay
+        for chunk in response.split():
+            full_response += chunk + " "
+            time.sleep(0.05)
+            # Add a blinking cursor to simulate typing
+            message_placeholder.markdown(full_response + "▌")
+        message_placeholder.markdown(full_response)
 
-        # Generate an answer using the OpenAI API.
-        stream = client.chat.completions.create(
-            model="gpt-3.5-turbo",
-            messages=messages,
-            stream=True,
-        )
-
-        # Stream the response to the app using `st.write_stream`.
-        st.write_stream(stream)
+    # Add assistant message to chat history
+    st.session_state.messages.append({"role": "assistant", "content": response})
